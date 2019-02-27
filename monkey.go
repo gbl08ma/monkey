@@ -1,4 +1,4 @@
-package monkey // import "bou.ke/monkey"
+package monkey // import "github.com/gbl08ma/monkey"
 
 import (
 	"fmt"
@@ -6,6 +6,12 @@ import (
 	"sync"
 	"unsafe"
 )
+
+//go:linkname stopTheWorld runtime.stopTheWorld
+func stopTheWorld(reason string)
+
+//go:linkname startTheWorld runtime.startTheWorld
+func startTheWorld()
 
 // patch is an applied patch
 // needed to undo a patch
@@ -80,6 +86,10 @@ func patchValue(target, replacement reflect.Value) {
 		panic(fmt.Sprintf("target and replacement have to have the same type %s != %s", target.Type(), replacement.Type()))
 	}
 
+	// once the world is stopped, we cannot panic, or we will be forced to crash
+	stopTheWorld("monkey patch")
+	defer startTheWorld()
+
 	if patch, ok := patches[target.Pointer()]; ok {
 		unpatch(target.Pointer(), patch)
 	}
@@ -108,6 +118,8 @@ func UnpatchInstanceMethod(target reflect.Type, methodName string) bool {
 func UnpatchAll() {
 	lock.Lock()
 	defer lock.Unlock()
+	stopTheWorld("monkey unpatch all")
+	defer startTheWorld()
 	for target, p := range patches {
 		unpatch(target, p)
 		delete(patches, target)
@@ -119,6 +131,8 @@ func UnpatchAll() {
 func unpatchValue(target reflect.Value) bool {
 	lock.Lock()
 	defer lock.Unlock()
+	stopTheWorld("monkey unpatch")
+	defer startTheWorld()
 	patch, ok := patches[target.Pointer()]
 	if !ok {
 		return false

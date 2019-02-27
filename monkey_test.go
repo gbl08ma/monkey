@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"bou.ke/monkey"
+	"github.com/gbl08ma/monkey"
 	"github.com/stretchr/testify/assert"
 )
 
