@@ -36,16 +36,31 @@ func getPtr(v reflect.Value) unsafe.Pointer {
 }
 
 type PatchGuard struct {
+	lock        sync.Mutex
 	target      reflect.Value
 	replacement reflect.Value
 }
 
+// Unpatch removes the patch
 func (g *PatchGuard) Unpatch() {
 	unpatchValue(g.target)
 }
 
+// Restore restores the replacement function
 func (g *PatchGuard) Restore() {
 	patchValue(g.target, g.replacement)
+}
+
+// UnpatchLock removes the patch in a thread-safe way, expecting the patch to be restored later using RestoreLock
+func (g *PatchGuard) UnpatchLock() {
+	g.lock.Lock()
+	unpatchValue(g.target)
+}
+
+// RestoreLock restores the replacement function in a thread-safe way. Must only be called if UnpatchLock was used previously
+func (g *PatchGuard) RestoreLock() {
+	patchValue(g.target, g.replacement)
+	g.lock.Unlock()
 }
 
 // Patch replaces a function with another
@@ -54,7 +69,7 @@ func Patch(target, replacement interface{}) *PatchGuard {
 	r := reflect.ValueOf(replacement)
 	patchValue(t, r)
 
-	return &PatchGuard{t, r}
+	return &PatchGuard{sync.Mutex{}, t, r}
 }
 
 // PatchInstanceMethod replaces an instance method methodName for the type target with replacement
@@ -67,7 +82,14 @@ func PatchInstanceMethod(target reflect.Type, methodName string, replacement int
 	r := reflect.ValueOf(replacement)
 	patchValue(m.Func, r)
 
-	return &PatchGuard{m.Func, r}
+	return &PatchGuard{sync.Mutex{}, m.Func, r}
+}
+
+// PatchCount returns the number of currently patched functions and type methods
+func PatchCount() int {
+	lock.Lock()
+	defer lock.Unlock()
+	return len(patches)
 }
 
 func patchValue(target, replacement reflect.Value) {
